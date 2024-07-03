@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Scoreboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .disabled {
+      background-color: #d1d5db; /* Tailwind gray-400 */
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    .ball {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      color: white;
+      font-weight: bold;
+      margin: 0 5px;
+    }
+    .ball.red { background-color: red; }
+    .ball.yellow { background-color: yellow; color: black; }
+    .ball.green { background-color: green; }
+    .ball.brown { background-color: #8B4513; }
+    .ball.blue { background-color: blue; }
+    .ball.pink { background-color: pink; color: black; }
+    .ball.black { background-color: black; }
+  </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+  <div class="bg-white p-8 rounded-lg shadow-lg text-center w-full max-w-xl">
+    <h1 class="text-2xl font-bold mb-6">Scoreboard</h1>
+
+    <div class="mb-4">
+      <label for="match-number" class="block text-gray-700">Match Number</label>
+      <input id="match-number" type="text" class="mt-1 block w-full px-3 py-2 border rounded-md text-gray-900" placeholder="Match Number">
+    </div>
+
+    <div class="mb-4">
+      <label for="tournament-state" class="block text-gray-700">Tournament State</label>
+      <input id="tournament-state" type="text" class="mt-1 block w-full px-3 py-2 border rounded-md text-gray-900" placeholder="Example: Semi-Finals">
+    </div>
+
+    <div class="mb-4">
+      <label for="player1-name" class="block text-gray-700">Player 1 Name</label>
+      <input id="player1-name" type="text" class="mt-1 block w-full px-3 py-2 border rounded-md text-gray-900" placeholder="Player 1 Name">
+    </div>
+
+    <div class="mb-4">
+      <label for="player2-name" class="block text-gray-700">Player 2 Name</label>
+      <input id="player2-name" type="text" class="mt-1 block w-full px-3 py-2 border rounded-md text-gray-900" placeholder="Player 2 Name">
+    </div>
+
+    <div class="flex justify-between mb-6">
+      <div>
+        <h2 id="player1-name-display" class="text-xl font-semibold mb-2">Player 1</h2>
+        <div id="player1-score" class="text-2xl font-bold">0</div>
+        <button class="bg-blue-500 text-white rounded-full px-4 py-2 mt-2" onclick="setCurrentPlayer(1)">Player 1</button>
+        <div id="player1-balls" class="mt-4"></div>
+      </div>
+      <div>
+        <h2 id="player2-name-display" class="text-xl font-semibold mb-2">Player 2</h2>
+        <div id="player2-score" class="text-2xl font-bold">0</div>
+        <button class="bg-blue-500 text-white rounded-full px-4 py-2 mt-2" onclick="setCurrentPlayer(2)">Player 2</button>
+        <div id="player2-balls" class="mt-4"></div>
+      </div>
+    </div>
+
+    <div id="buttons" class="grid grid-cols-4 gap-4 mb-6">
+      <button id="red-button" class="bg-red-500 text-white rounded-full h-16 w-16" onclick="potBall('Red')">Red</button>
+      <button id="yellow-button" class="bg-yellow-500 text-white rounded-full h-16 w-16" onclick="potBall('Yellow')">Yellow</button>
+      <button id="green-button" class="bg-green-500 text-white rounded-full h-16 w-16" onclick="potBall('Green')">Green</button>
+      <button id="brown-button" class="bg-brown-500 text-white rounded-full h-16 w-16" onclick="potBall('Brown')">Brown</button>
+      <button id="blue-button" class="bg-blue-500 text-white rounded-full h-16 w-16" onclick="potBall('Blue')">Blue</button>
+      <button id="pink-button" class="bg-pink-500 text-white rounded-full h-16 w-16" onclick="potBall('Pink')">Pink</button>
+      <button id="black-button" class="bg-black text-white rounded-full h-16 w-16" onclick="potBall('Black')">Black</button>
+      <button class="bg-gray-500 text-white rounded-full h-16 w-16" onclick="undo()">Undo</button>
+      <button class="bg-gray-500 text-white rounded-full h-16 w-16" onclick="redo()">Redo</button>
+    </div>
+
+    <div class="text-xl">
+      <span>Red balls remaining: <span id="red-balls-remaining">15</span></span>
+    </div>
+  </div>
+
+  <script>
+    let history = [];
+    let redoStack = [];
+    let player1Score = 0;
+    let player2Score = 0;
+    let currentPlayer = 1;
+    let redBallsRemaining = 15;
+    const colorsOrder = ['Yellow', 'Green', 'Brown', 'Blue', 'Pink', 'Black'];
+    let currentColorIndex = -1;
+
+    const player1Balls = {
+      Red: 0, Yellow: 0, Green: 0, Brown: 0, Blue: 0, Pink: 0, Black: 0
+    };
+    const player2Balls = {
+      Red: 0, Yellow: 0, Green: 0, Brown: 0, Blue: 0, Pink: 0, Black: 0
+    };
+
+    function setCurrentPlayer(player) {
+      currentPlayer = player;
+    }
+
+    function potBall(color) {
+      const time = new Date().toISOString();
+      const point = getPoints(color);
+      const matchNumber = document.getElementById('match-number').value;
+      const tournamentState = document.getElementById('tournament-state').value;
+      const player1Name = document.getElementById('player1-name').value;
+      const player2Name = document.getElementById('player2-name').value;
+
+      if (color === 'Red') {
+        redBallsRemaining--;
+        document.getElementById('red-balls-remaining').innerText = redBallsRemaining;
+      } else if (redBallsRemaining === 0) {
+        currentColorIndex++;
+      }
+
+      history.push({ color, time, point, currentPlayer });
+      redoStack = [];
+
+      updateScore(point, currentPlayer);
+      updateBallsPotted(color, currentPlayer);
+      sendScoreData({
+        match_id: matchNumber,
+        tournament_state: tournamentState,
+        player1_name: player1Name,
+        player2_name: player2Name,
+        color,
+        time,
+        point,
+        currentPlayer,
+        action: 'pot'
+      });
+
+      if (redBallsRemaining > 0) {
+        if (color === 'Red') {
+          enableColorButtons();
+          document.getElementById('red-button').classList.add('disabled');
+          document.getElementById('red-button').disabled = true;
+        } else {
+          enableRedButtonOnly();
+        }
+      } else if (redBallsRemaining === 0 && color === 'Red') {
+        enableColorButtons();
+      } else {
+        setNextColor();
+      }
+    }
+
+    function undo() {
+      if (history.length > 0) {
+        const lastAction = history.pop();
+        redoStack.push(lastAction);
+        updateScore(-lastAction.point, lastAction.currentPlayer);
+        updateBallsPotted(lastAction.color, lastAction.currentPlayer, true);
+        if (lastAction.color === 'Red') {
+          redBallsRemaining++;
+          document.getElementById('red-balls-remaining').innerText = redBallsRemaining;
+        } else if (redBallsRemaining === 0) {
+          currentColorIndex--;
+        }
+        sendScoreData({
+          color: lastAction.color,
+          time: new Date().toISOString(),
+          action: 'undo'
+        });
+        currentPlayer = lastAction.currentPlayer;
+        if (redBallsRemaining > 0) {
+          if (lastAction.color === 'Red') {
+            disableColorButtons();
+          } else {
+            enableRedButtonOnly();
+          }
+        } else {
+          setNextColor();
+        }
+      }
+    }
+
+    function redo() {
+      if (redoStack.length > 0) {
+        const redoAction = redoStack.pop();
+        history.push(redoAction);
+        updateScore(redoAction.point, redoAction.currentPlayer);
+        updateBallsPotted(redoAction.color, redoAction.currentPlayer);
+        if (redoAction.color === 'Red') {
+          redBallsRemaining--;
+          document.getElementById('red-balls-remaining').innerText = redBallsRemaining;
+        } else if (redBallsRemaining === 0) {
+          currentColorIndex++;
+        }
+        sendScoreData({
+          color: redoAction.color,
+          time: new Date().toISOString(),
+          action: 'redo'
+        });
+        currentPlayer = redoAction.currentPlayer;
+        if (redBallsRemaining > 0) {
+          if (redoAction.color === 'Red') {
+            disableColorButtons();
+          } else {
+            enableRedButtonOnly();
+          }
+        } else {
+          setNextColor();
+        }
+      }
+    }
+
+    function getPoints(color) {
+      switch (color) {
+        case 'Red': return 1;
+        case 'Yellow': return 2;
+        case 'Green': return 3;
+        case 'Brown': return 4;
+        case 'Blue': return 5;
+        case 'Pink': return 6;
+        case 'Black': return 7;
+        default: return 0;
+      }
+    }
+
+    function updateScore(points, player) {
+      if (player === 1) {
+        player1Score += points;
+        document.getElementById('player1-score').innerText = player1Score;
+      } else {
+        player2Score += points;
+        document.getElementById('player2-score').innerText = player2Score;
+      }
+    }
+
+    function updateBallsPotted(color, player, isUndo = false) {
+      const ballCount = isUndo ? -1 : 1;
+      if (player === 1) {
+        player1Balls[color] += ballCount;
+      } else {
+        player2Balls[color] += ballCount;
+      }
+      displayBallsPotted();
+    }
+
+    function displayBallsPotted() {
+      document.getElementById('player1-balls').innerHTML = generateBallsHtml(player1Balls);
+      document.getElementById('player2-balls').innerHTML = generateBallsHtml(player2Balls);
+    }
+
+    function generateBallsHtml(playerBalls) {
+      let html = '';
+      for (const color in playerBalls) {
+        if (playerBalls[color] > 0) {
+          html += `<div class="ball ${color.toLowerCase()}">${playerBalls[color]}</div>`;
+        }
+      }
+      return html;
+    }
+
+    function sendScoreData(data) {
+      fetch('https://your-drupal-site.com/scoreboard/receive-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Success:', data);
+      })
+      .catch((error) => {
+        console.error('Error:', error);
+      });
+    }
+
+    function disableColorButtons() {
+      document.getElementById('yellow-button').classList.add('disabled');
+      document.getElementById('yellow-button').disabled = true;
+      document.getElementById('green-button').classList.add('disabled');
+      document.getElementById('green-button').disabled = true;
+      document.getElementById('brown-button').classList.add('disabled');
+      document.getElementById('brown-button').disabled = true;
+      document.getElementById('blue-button').classList.add('disabled');
+      document.getElementById('blue-button').disabled = true;
+      document.getElementById('pink-button').classList.add('disabled');
+      document.getElementById('pink-button').disabled = true;
+      document.getElementById('black-button').classList.add('disabled');
+      document.getElementById('black-button').disabled = true;
+    }
+
+    function enableRedButtonOnly() {
+      document.getElementById('red-button').classList.remove('disabled');
+      document.getElementById('red-button').disabled = false;
+
+      document.getElementById('yellow-button').classList.add('disabled');
+      document.getElementById('yellow-button').disabled = true;
+      document.getElementById('green-button').classList.add('disabled');
+      document.getElementById('green-button').disabled = true;
+      document.getElementById('brown-button').classList.add('disabled');
+      document.getElementById('brown-button').disabled = true;
+      document.getElementById('blue-button').classList.add('disabled');
+      document.getElementById('blue-button').disabled = true;
+      document.getElementById('pink-button').classList.add('disabled');
+      document.getElementById('pink-button').disabled = true;
+      document.getElementById('black-button').classList.add('disabled');
+      document.getElementById('black-button').disabled = true;
+    }
+
+    function enableColorButtons() {
+      document.getElementById('red-button').classList.add('disabled');
+      document.getElementById('red-button').disabled = true;
+
+      document.getElementById('yellow-button').classList.remove('disabled');
+      document.getElementById('yellow-button').disabled = false;
+      document.getElementById('green-button').classList.remove('disabled');
+      document.getElementById('green-button').disabled = false;
+      document.getElementById('brown-button').classList.remove('disabled');
+      document.getElementById('brown-button').disabled = false;
+      document.getElementById('blue-button').classList.remove('disabled');
+      document.getElementById('blue-button').disabled = false;
+      document.getElementById('pink-button').classList.remove('disabled');
+      document.getElementById('pink-button').disabled = false;
+      document.getElementById('black-button').classList.remove('disabled');
+      document.getElementById('black-button').disabled = false;
+    }
+
+    function setNextColor() {
+      disableColorButtons();
+      if (currentColorIndex < colorsOrder.length) {
+        const nextColor = colorsOrder[currentColorIndex];
+        const buttonId = nextColor.toLowerCase() + '-button';
+        document.getElementById(buttonId).classList.remove('disabled');
+        document.getElementById(buttonId).disabled = false;
+      }
+    }
+
+    document.getElementById('player1-name').addEventListener('input', (event) => {
+      document.getElementById('player1-name-display').innerText = event.target.value;
+    });
+
+    document.getElementById('player2-name').addEventListener('input', (event) => {
+      document.getElementById('player2-name-display').innerText = event.target.value;
+    });
+  </script>
+</body>
+</html>
